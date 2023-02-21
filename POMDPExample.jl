@@ -85,7 +85,7 @@ cbsimulator = QuickPOMDP(
     end,
 
     observation = (a, sp) -> Deterministic(sp),
-
+    obstype = EconomyState,
     initialstate = Deterministic(initialEconomyState),
     isterminal = (s::EconomyState) -> (s.i > 0.5),
 )
@@ -111,11 +111,11 @@ for (s, a, o, r) in stepthrough(cbsimulator, policy, "s,a,o,r", max_steps=100)
     println("State was $s,")
     println("action $a was taken,")
     println("received observation $o and reward $r")
-    push!(i_history, s.i)
-    push!(π_history, s.π)
-    push!(π_e_history, s.π_e)
-    push!(r_history, s.r)
-    push!(u_history, s.u)
+    push!(i_history, s.i * 100)
+    push!(π_history, s.π * 100)
+    push!(π_e_history, s.π_e * 100)
+    push!(r_history, s.r * 100)
+    push!(u_history, s.u * 100)
 end
 
 
@@ -130,7 +130,8 @@ push!(chart_data, π_history)
 push!(chart_data, π_e_history)
 push!(chart_data, r_history)
 push!(chart_data, u_history)
-plot(x_axis, chart_data, label=labelVec)
+y = chart_data
+plot(x_axis, y, label=labelVec)
 
 savefig("output.png")
 
