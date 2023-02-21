@@ -1,4 +1,7 @@
 """ 
+# Overview of Solvers
+https://github.com/JuliaPOMDP/POMDPs.jl
+
 # Offline Solver
 - MDP Case (check)
 - POMDP Case (http://juliapomdp.github.io/POMDPs.jl/stable/offline_solver/)
