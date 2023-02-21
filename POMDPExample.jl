@@ -6,6 +6,7 @@ using POMDPs: solve
 using POMDPTools: Deterministic
 using QMDP
 using QuickPOMDPs: QuickPOMDP
+using Distributions
 
 struct EconomyState
     y::Float16
@@ -38,9 +39,14 @@ initialEconomyState = EconomyState(
     0.045 # u unemployment rate
 ) # initialize an economyState
 
+function reward(π)
+    return -100 * abs(π - 0.02)
+end
+
+
 cbsimulator = QuickPOMDP(
-    actions = [-0.5, 0., 0.5],
-    discount = 0.95,
+    actions = [-0.0075, -0.005, -0.0025, 0., 0.0025, 0.005, 0.0075],
+    discount = 0.5,
 
     gen = function (c::EconomyState, a, rng)
         y::Float16 = c.y
@@ -49,7 +55,7 @@ cbsimulator = QuickPOMDP(
         π_e::Float16 = c.π_e
         r::Float16 = c.r
         u::Float16 = c.u
-        π = π + a # new line: updates interest rate to reflect CB action
+        i = i + a # new line: updates interest rate to reflect CB action
         dt = 0.1 # some arbitary measure of time elapsing
         ϵ = rand() * 0.003 
         flip = rand() < 0.5 ? -1 : 1
@@ -63,9 +69,9 @@ cbsimulator = QuickPOMDP(
         π = π_e + (y - y_bar) / σπ
         π_e_dot = (π - π_e) / σπ_e + ϵ
         π_e += dt * π_e_dot
-        #u_dot = -y_dot / σu
-        #c.u += u_dot * dt
-        #c.u = max(c.u, 0) # unemployment rate can't be less than 0
+        u_dot = -y_dot / σu
+        u += u_dot * dt
+        u = max(u, 0) # unemployment rate can't be less than 0
 
         
         return (sp=EconomyState(y::Float16,
@@ -74,7 +80,8 @@ cbsimulator = QuickPOMDP(
         π_e::Float16,
         r::Float16,
         u::Float16),
-        r= (c.π == 0.02 ? 100.0 : -1.0))
+        # r= (c.π == 0.02 ? 100.0 : -1.0))
+        r = reward(π))
     end,
 
     observation = (a, sp) -> Deterministic(sp),
@@ -100,7 +107,7 @@ i_history = Vector{Float16}()
 π_e_history = Vector{Float16}()
 r_history = Vector{Float16}()
 u_history = Vector{Float16}()
-for (s, a, o, r) in stepthrough(cbsimulator, policy, "s,a,o,r", max_steps=10)
+for (s, a, o, r) in stepthrough(cbsimulator, policy, "s,a,o,r", max_steps=100)
     println("State was $s,")
     println("action $a was taken,")
     println("received observation $o and reward $r")
