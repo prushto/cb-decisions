@@ -1,20 +1,11 @@
-# using Pkg
-# Pkg.add("Plots")
-# Pkg.add("POMDPs")
-
 using Plots
-using POMDPs
-using QuickPOMDPs
+using POMCPOW
 using POMDPModelTools
-using QMDP
-using AdaOPS
 using POMDPSimulators
-import POMDPs: solve
-# using POMDPSolve
-import QuickPOMDPs: QuickPOMDP
+using POMDPs: solve
 using POMDPTools: Deterministic
-using POMDPTools: AlphaVectorPolicy
-# import Distributions: Normal
+using QMDP
+using QuickPOMDPs: QuickPOMDP
 
 struct EconomyState
     y::Float16
@@ -82,18 +73,11 @@ cbsimulator = QuickPOMDP(
         π::Float16,
         π_e::Float16,
         r::Float16,
-        u::Float16), r= (c.π == 0.02 ? 100.0 : -1.0))
+        u::Float16),
+        r= (c.π == 0.02 ? 100.0 : -1.0))
     end,
 
-    observation = (a, sp) -> sp,
-
-    # reward = function (s, a, sp)
-    #     if sp.i == 0.02
-    #         return 100.0
-    #     else 
-    #         return -1.0
-    #     end
-    # end,
+    observation = (a, sp) -> Deterministic(sp),
 
     initialstate = Deterministic(initialEconomyState),
     isterminal = (s::EconomyState) -> (s.i > 0.5),
@@ -101,98 +85,47 @@ cbsimulator = QuickPOMDP(
 
 
 #solver = QMDPSolver()
-#policy = solve(solver, m)
+solver = POMCPOWSolver(criterion=MaxUCB(20.0))
 
-"""
-struct GreedyOfflineSolver <: Solver end
-
-struct DictPolicy{S,A} <: Policy
-    actions::Dict{S,A}
-end
-
-function POMDPs.solve(::GreedyOfflineSolver, m::POMDP)
-
-    alphas = Vector{Float64}[]
-
-    for a in actions(m)
-        alpha = zeros(length(states(m)))
-        for s in states(m)
-            if !isterminal(m, s)
-                r = 0.0
-                td = transition(m, s, a)
-                for sp in support(td)
-                    tp = pdf(td, sp)
-                    od = observation(m, s, a, sp)
-                    for o in support(od)
-                        r += tp * pdf(od, o) * reward(m, s, a, sp, o)
-                    end
-                end
-                alpha[stateindex(m, s)] = r
-            end
-        end
-        push!(alphas, alpha)
-    end
-    
-    return AlphaVectorPolicy(m, alphas, collect(actions(m)))
-end
-
-# MDP Offline Solver
-POMDPs.action(p::DictPolicy, s) = p.actions[s]
-
-function solve(::GreedyOfflineSolver, m::MDP)
-
-    best_actions = Dict{statetype(m), actiontype(m)}()
-
-    for s in states(m)
-        if !isterminal(m, s)
-            best = -Inf
-            for a in actions(m)
-                td = transition(m, s, a)
-                r = 0.0
-                for sp in support(td)
-                    r += pdf(td, sp) * reward(m, s, a, sp)
-                end
-                if r >= best
-                    best_actions[s] = a
-                    best = r
-                end
-            end
-        end
-    end
-    
-    return DictPolicy(best_actions)
-end
-"""
+policy = solve(solver, cbsimulator)
 
 # For chart
 chart_data = []
 labelVec = ["i" "π" "π_e" "r" "u"]
 
 
-policy = solve(AdaOPSSolver(bounds=IndependentBounds(-20.0, 0.0)), cbsimulator)
 
-s = nothing
+i_history = Vector{Float16}()
+π_history = Vector{Float16}()
+π_e_history = Vector{Float16}()
+r_history = Vector{Float16}()
+u_history = Vector{Float16}()
 for (s, a, o, r) in stepthrough(cbsimulator, policy, "s,a,o,r", max_steps=10)
     println("State was $s,")
     println("action $a was taken,")
     println("received observation $o and reward $r")
+    push!(i_history, s.i)
+    push!(π_history, s.π)
+    push!(π_e_history, s.π_e)
+    push!(r_history, s.r)
+    push!(u_history, s.u)
 end
 
 
-x_axis = collect(1:length(s.i_history))
+x_axis = collect(1:length(i_history))
 
 # need the line below to record and display multiple charts - see notebook
 # all_chart_data = Plots.Plot{Plots.GRBackend}[]
 
 # Output chart
-push!(chart_data, s.i_history)
-push!(chart_data, s.π_history)
-push!(chart_data, s.π_e_history)
-push!(chart_data, s.r_history)
-push!(chart_data, s.u_history)
+push!(chart_data, i_history)
+push!(chart_data, π_history)
+push!(chart_data, π_e_history)
+push!(chart_data, r_history)
+push!(chart_data, u_history)
 plot(x_axis, chart_data, label=labelVec)
 
-
+savefig("output.png")
 
 # Below is code for multiple charts
 # push!(all_chart_data, plot(x_axis, chart_data, label=labelVec))
