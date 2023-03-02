@@ -20,11 +20,11 @@ function stepthrough_and_plot(cbsimulator, base_policy, output_filename)
     chart_data = []
     labelVec = ["i" "π" "π_e" "r" "u"]
 
-    i_history = Vector{Float16}()
-    π_history = Vector{Float16}()
-    π_e_history = Vector{Float16}()
-    r_history = Vector{Float16}()
-    u_history = Vector{Float16}()
+    i_history = Vector{Float64}()
+    π_history = Vector{Float64}()
+    π_e_history = Vector{Float64}()
+    r_history = Vector{Float64}()
+    u_history = Vector{Float64}()
     reward_sum = 0
     for (s, a, o, r) in stepthrough(cbsimulator, base_policy, "s,a,o,r", max_steps=100)
         println("State was $s,")
@@ -56,12 +56,12 @@ function stepthrough_and_plot(cbsimulator, base_policy, output_filename)
 end
 
 struct EconomyState
-    y::Float16
-    i::Float16
-    π::Float16
-    π_e::Float16
-    r::Float16
-    u::Float16
+    y::Float64
+    i::Float64
+    π::Float64
+    π_e::Float64
+    r::Float64
+    u::Float64
 end
 
 
@@ -87,12 +87,12 @@ initialEconomyState = EconomyState(
 ) # initialize an economyState
 
 function observation(a, sp)
-    y::Float16 = sp.y
-    i::Float16 = sp.i
-    π::Float16 = sp.π
-    π_e::Float16 = sp.π_e
-    r::Float16 = sp.r
-    u::Float16 = sp.u
+    y::Float64 = sp.y
+    i::Float64 = sp.i
+    π::Float64 = sp.π
+    π_e::Float64 = sp.π_e
+    r::Float64 = sp.r
+    u::Float64 = sp.u
 
     dy = EconomyState(y+0.04, i, π, π_e, r, u)
     dy2 = EconomyState(y-0.04, i, π, π_e, r, u)
@@ -118,12 +118,12 @@ cbsimulator = QuickPOMDP(
     discount = 0.5,
 
     gen = function (c::EconomyState, a, rng)
-        y::Float16 = c.y
-        i::Float16 = c.i
-        π::Float16 = c.π
-        π_e::Float16 = c.π_e
-        r::Float16 = c.r
-        u::Float16 = c.u
+        y::Float64 = c.y
+        i::Float64 = c.i
+        π::Float64 = c.π
+        π_e::Float64 = c.π_e
+        r::Float64 = c.r
+        u::Float64 = c.u
         i = i + a # new line: updates interest rate to reflect CB action
         dt = 0.1 # some arbitary measure of time elapsing
         ϵ = rand() * 0.003 
@@ -144,12 +144,12 @@ cbsimulator = QuickPOMDP(
         u = max(u, 0) # unemployment rate can't be less than 0
         
         return (
-            sp=EconomyState(y::Float16,
-                i::Float16,
-                π::Float16,
-                π_e::Float16,
-                r::Float16,
-                u::Float16),
+            sp=EconomyState(y::Float64,
+                i::Float64,
+                π::Float64,
+                π_e::Float64,
+                r::Float64,
+                u::Float64),
             r=reward(π)
             )
     end,
