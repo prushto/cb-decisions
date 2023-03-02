@@ -1,12 +1,60 @@
 using Plots
 using POMCPOW
-using POMDPModelTools
 using POMDPSimulators
 using POMDPs: solve
-using POMDPTools: Deterministic
+using POMDPTools: Deterministic, Uniform
 using QMDP
 using QuickPOMDPs: QuickPOMDP
 using Distributions
+using POMDPs: Policy
+using POMDPPolicies: FunctionPolicy, RandomPolicy
+
+using POMDPs, POMDPModels, AdaOPS
+
+# using Pkg
+# Pkg.add(url="https://github.com/WhiffleFish/ParticleFilterTrees.jl")
+using ParticleFilterTrees
+
+# include("time_elapse.jl")
+
+function stepthrough_and_plot(cbsimulator, base_policy, output_filename)
+    chart_data = []
+    labelVec = ["i" "π" "π_e" "r" "u"]
+
+    i_history = Vector{Float16}()
+    π_history = Vector{Float16}()
+    π_e_history = Vector{Float16}()
+    r_history = Vector{Float16}()
+    u_history = Vector{Float16}()
+    reward_sum = 0
+    for (s, a, o, r) in stepthrough(cbsimulator, base_policy, "s,a,o,r", max_steps=100)
+        println("State was $s,")
+        println("action $a was taken,")
+        println("received observation $o and reward $r")
+        push!(i_history, s.i * 100)
+        push!(π_history, s.π * 100)
+        push!(π_e_history, s.π_e * 100)
+        push!(r_history, s.r * 100)
+        push!(u_history, s.u * 100)
+        reward_sum += r
+    end
+
+    x_axis = collect(1:length(i_history))
+
+    # need the line below to record and display multiple charts - see notebook
+    # all_chart_data = Plots.Plot{Plots.GRBackend}[]
+
+    # Output chart
+    push!(chart_data, i_history)
+    push!(chart_data, π_history)
+    push!(chart_data, π_e_history)
+    push!(chart_data, r_history)
+    push!(chart_data, u_history)
+    y = chart_data
+    plot(x_axis, y, label=labelVec)
+    println("Total rewards: " * string(reward_sum))
+    savefig(output_filename)
+end
 
 struct EconomyState
     y::Float16
@@ -40,14 +88,36 @@ initialEconomyState = EconomyState(
 ) # initialize an economyState
 
 function reward(π)
-    return -100 * abs(π - 0.02)
+    # return -100 * abs(π - 0.02)
+    return -100 * ((π - 0.02)^2)
 end
 
+function observation(a, sp)
+    y::Float16 = sp.y
+    i::Float16 = sp.i
+    π::Float16 = sp.π
+    π_e::Float16 = sp.π_e
+    r::Float16 = sp.r
+    u::Float16 = sp.u
+
+    dy = EconomyState(y+0.04, i, π, π_e, r, u)
+    dy2 = EconomyState(y-0.04, i, π, π_e, r, u)
+    dp = EconomyState(y, i, π+0.01, π_e, r, u)
+    dp2 = EconomyState(y, i, π-0.01, π_e, r, u)
+    dpe = EconomyState(y, i, π, π_e+0.01, r, u)
+    dpe2 = EconomyState(y, i, π, π_e-0.01, r, u)
+    dr = EconomyState(y, i, π, π_e, r+0.01, u)
+    dr2 = EconomyState(y, i, π, π_e, r-0.01, u)
+    du = EconomyState(y, i, π, π_e, r, u+0.01)
+    du2 = EconomyState(y, i, π, π_e, r, u-0.01)
+    return Uniform([sp dy dy2 dp dp2 dpe dpe2 dr dr2 du du2])
+end
 
 cbsimulator = QuickPOMDP(
-    actions = [-0.0075, -0.005, -0.0025, 0., 0.0025, 0.005, 0.0075],
+    actions = collect(Float32, -0.05:0.0005:0.05),
     discount = 0.5,
 
+    # gen = time_elapse,
     gen = function (c::EconomyState, a, rng)
         y::Float16 = c.y
         i::Float16 = c.i
@@ -61,18 +131,18 @@ cbsimulator = QuickPOMDP(
         flip = rand() < 0.5 ? -1 : 1
         η = rand() < 0.25 ? rand() * 0.015 * flip : 0
         flip = rand() < 0.5 ? -1 : 1
-        demandShock = rand() < 0.04 ? rand() * 0.04 * flip : 0
+        demandShock = rand() < 0.04 ? rand() * 0.02 * flip : 0 # 4% chance of demand shock, either positive or negative
         r = i - π_e
-        y_dot = - (r - r_bar) / σy + η + demandShock
+        y_dot = - (r - r_bar) / σy + η + demandShock # change to rate of output
+        # println(y_dot)
         y += y_dot * dt
-        y = min(y, y_bar + (u_bar * σu))
+        y = min(y, y_bar + (u_bar * σu)) # change in y is either determined by demand shock or change in unemployment, whichever is more negative
         π = π_e + (y - y_bar) / σπ
         π_e_dot = (π - π_e) / σπ_e + ϵ
         π_e += dt * π_e_dot
         u_dot = -y_dot / σu
         u += u_dot * dt
         u = max(u, 0) # unemployment rate can't be less than 0
-
         
         return (sp=EconomyState(y::Float16,
         i::Float16,
@@ -83,61 +153,26 @@ cbsimulator = QuickPOMDP(
         # r= (c.π == 0.02 ? 100.0 : -1.0))
         r = reward(π))
     end,
-
-    observation = (a, sp) -> Deterministic(sp),
+    observation = observation,
     obstype = EconomyState,
     initialstate = Deterministic(initialEconomyState),
     isterminal = (s::EconomyState) -> (s.i > 0.5),
 )
 
-
-#solver = QMDPSolver()
-solver = POMCPOWSolver(criterion=MaxUCB(20.0))
+base_policy = FunctionPolicy((pol) -> 0)
+random_policy = RandomPolicy(cbsimulator)
+solver = AdaOPSSolver()
+# solver = POMCPOWSolver(criterion=MaxUCB(1.0))
+# solver = PFTDPWSolver() #From Anka: Try this solver, didn't work :(
 
 policy = solve(solver, cbsimulator)
 
-# For chart
-chart_data = []
-labelVec = ["i" "π" "π_e" "r" "u"]
-
-
-
-i_history = Vector{Float16}()
-π_history = Vector{Float16}()
-π_e_history = Vector{Float16}()
-r_history = Vector{Float16}()
-u_history = Vector{Float16}()
-for (s, a, o, r) in stepthrough(cbsimulator, policy, "s,a,o,r", max_steps=100)
-    println("State was $s,")
-    println("action $a was taken,")
-    println("received observation $o and reward $r")
-    push!(i_history, s.i * 100)
-    push!(π_history, s.π * 100)
-    push!(π_e_history, s.π_e * 100)
-    push!(r_history, s.r * 100)
-    push!(u_history, s.u * 100)
-end
-
-
-x_axis = collect(1:length(i_history))
-
-# need the line below to record and display multiple charts - see notebook
-# all_chart_data = Plots.Plot{Plots.GRBackend}[]
-
-# Output chart
-push!(chart_data, i_history)
-push!(chart_data, π_history)
-push!(chart_data, π_e_history)
-push!(chart_data, r_history)
-push!(chart_data, u_history)
-y = chart_data
-plot(x_axis, y, label=labelVec)
-
-savefig("output.png")
+stepthrough_and_plot(cbsimulator, policy, "output.png")
+stepthrough_and_plot(cbsimulator, base_policy, "base_output.png")
+stepthrough_and_plot(cbsimulator, random_policy, "rand_output.png")
 
 # Below is code for multiple charts
 # push!(all_chart_data, plot(x_axis, chart_data, label=labelVec))
 
 # plot1 = all_chart_data[1]
 # plot(plot1)
-
