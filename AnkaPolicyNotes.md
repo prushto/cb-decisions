@@ -1,4 +1,3 @@
-""" 
 # Overview of Solvers
 https://github.com/JuliaPOMDP/POMDPs.jl
 
@@ -12,4 +11,3 @@ https://github.com/JuliaPOMDP/POMDPs.jl
 
 # POMDP Solver with more stuff to play around with
 - https://github.com/JuliaPOMDP/POMDPSolve.jl
-"""
