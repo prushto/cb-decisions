@@ -1,4 +1,5 @@
 using AdaOPS
+using CSV
 using Dates
 using Distributions
 using Plots
@@ -8,6 +9,7 @@ using POMDPModels
 using POMDPPolicies: FunctionPolicy, RandomPolicy
 using POMDPSimulators
 using POMDPTools: Deterministic, Uniform
+using Tables
 using QMDP
 using QuickPOMDPs: QuickPOMDP
 
@@ -52,7 +54,8 @@ function stepthrough_and_plot(cbsimulator, base_policy, output_filename)
     y = chart_data
     plot(x_axis, y, label=labelVec)
     println("Total rewards: " * string(reward_sum))
-    savefig(output_filename)
+    savefig(output_filename * ".png")
+    CSV.write(output_filename * ".csv", Tables.table(hcat(chart_data...), header=vec(labelVec)))
 end
 
 struct EconomyState
@@ -154,6 +157,7 @@ cbsimulator = QuickPOMDP(
             )
     end,
     observation = observation,
+    # observation = (a, sp) -> Deterministic(sp),
     obstype = EconomyState,
     initialstate = Deterministic(initialEconomyState),
     isterminal = (s::EconomyState) -> (s.i > 0.5),
@@ -168,6 +172,6 @@ base_policy = FunctionPolicy((pol) -> 0)
 random_policy = RandomPolicy(cbsimulator)
 
 timestamp = Dates.format(now(), "yyyy-mm-ddTHHMMSS")
-stepthrough_and_plot(cbsimulator, policy, "output/output" * timestamp * ".png")
-stepthrough_and_plot(cbsimulator, base_policy, "output/output_zero" * timestamp * ".png")
-stepthrough_and_plot(cbsimulator, random_policy, "output/output_rand" * timestamp * ".png")
+stepthrough_and_plot(cbsimulator, policy, "output/pomdp_output_adaops" * timestamp)
+stepthrough_and_plot(cbsimulator, base_policy, "output/pomdp_output_zero" * timestamp)
+stepthrough_and_plot(cbsimulator, random_policy, "output/pomdp_output_rand" * timestamp)
